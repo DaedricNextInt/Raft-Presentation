@@ -422,13 +422,15 @@
         color: #cbb2ff;
       }
     .gloss{position:relative;background:#2a2150;color:#cbb2ff;border-bottom:1.5px dotted #cbb2ff;border-radius:4px 4px 0 0;padding:0 4px;cursor:help;outline:none}.gloss::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 12px);transform:translate(-50%,6px);width:min(320px,80vw);background:#101827;border:1px solid #7547d5;border-radius:12px;padding:11px 13px;color:#dbe5f6;font-size:13px;font-weight:500;line-height:1.5;text-align:left;white-space:normal;box-shadow:0 14px 40px #000a;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:50}.gloss::before{content:"";position:absolute;left:50%;bottom:calc(100% + 6px);width:10px;height:10px;background:#101827;border-right:1px solid #7547d5;border-bottom:1px solid #7547d5;transform:translateX(-50%) rotate(45deg);opacity:0;transition:opacity .18s;z-index:51;pointer-events:none}.gloss:hover::after,.gloss:focus-visible::after{opacity:1;transform:translate(-50%,0)}.gloss:hover::before,.gloss:focus-visible::before{opacity:1}
+.top{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}.ctlrow{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px 24px}
+@media(min-width:1000px) and (min-height:640px){html body.fit{overflow:hidden;padding-top:58px!important;padding-bottom:72px!important}html body.fit .shell{height:calc(100vh - 132px);display:flex;flex-direction:column;padding:14px 22px;max-width:1340px}.fit .top h1{margin:0;font-size:26px;letter-spacing:-.5px}.fit .sub{font-size:13px;line-height:1.4;margin:6px 0 4px}.fit #title{font-size:17px;margin:4px 0 2px}.fit #desc{margin:0 0 8px;min-height:0;font-size:14px;line-height:1.4}.fit .layout{flex:1;min-height:0;grid-template-columns:1.15fr 1fr;grid-template-rows:minmax(0,1fr);gap:12px}.fit .layout .panel{padding:10px 12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}.fit .layout .panel h2{margin-bottom:6px}.fit .layout .panel svg{flex:1;min-height:0;height:100%}.fit .stepl li{padding:7px 10px;font-size:12.5px;line-height:1.4;gap:10px}.fit .stepl li b{font-size:14px}.fit .stepl li i{width:22px;height:22px}.fit .ctlrow .meta,.fit .ctlrow .controls{margin-top:8px}.fit .meta{font-size:12.5px;gap:14px}.fit .controls button{padding:7px 12px;font-size:13px}.fit .progress{margin-top:8px}.fit .quote{margin-top:10px;padding:10px 14px;font-size:clamp(14px,1.4vw,18px)}}
 </style>
     <script src="nav.js"></script>
   </head>
-  <body>
+  <body class="fit">
     <main class="shell">
-      <span class="pill">RAFT INTEGRATED STORAGE</span>
-      <h1>How HashiCorp Vault Uses Raft</h1>
+      <div class="top"><span class="pill">RAFT INTEGRATED STORAGE</span>
+      <h1>How HashiCorp Vault Uses Raft</h1></div>
       <p class="sub">
         <strong
           >Vault uses Raft to keep encrypted data consistent across multiple
@@ -461,7 +463,7 @@
           <ul class="stepl" id="stepl"></ul>
         </section>
       </div>
-      <div class="meta">
+      <div class="ctlrow"><div class="meta">
         <span id="acks"></span><span>QUORUM <strong>3 / 5</strong></span
         ><span>RING = ELECTION TIMEOUT LEFT</span><span id="state"></span>
       </div>
@@ -469,6 +471,7 @@
         <button id="prev">← Previous</button
         ><button id="next" class="primary">Next →</button
         ><button id="play">▶ Play</button><button id="reset">↺ Reset</button>
+      </div>
       </div>
       <div class="progress"><div id="bar"></div></div>
       <div class="quote">
