@@ -1,41 +1,846 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>How Vault Uses Raft</title><style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 25% 0%,#211a3c 0%,#090d18 50%);color:#eef2ff;min-height:100vh;padding:28px}.shell{max-width:1200px;margin:auto;background:#101827;border:1px solid #29354b;border-radius:24px;padding:28px;box-shadow:0 25px 70px #0006}.pill{display:inline-block;background:#352350;color:#cbb2ff;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:800;letter-spacing:1px}h1{font-size:clamp(26px,4vw,40px);margin:16px 0 6px;letter-spacing:-1px}.sub{color:#9bacc5;margin:0 0 18px;line-height:1.5}.sub strong{color:#eef2ff}#title{font-size:20px;color:#c4a6ff;font-weight:750;margin:10px 0 5px}#desc{color:#9bacc5;margin:0 0 22px;min-height:25px}.layout{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}.panel{background:#141f30;border:1px solid #2a3a52;border-radius:18px;padding:17px;min-width:0}.panel+.panel{margin:0}.panel h2{font-size:12px;letter-spacing:1.6px;color:#8fa1ba;margin:0 0 10px}.full{margin-top:18px}svg{width:100%;height:auto;display:block}.node circle.outer{fill:#22324b;stroke:#7187b0;stroke-width:3;transition:fill .35s,stroke .35s}.node circle.inner{fill:#7187b0}.node.leader circle.outer{stroke:#20c8ad}.node.leader circle.inner{fill:#20c8ad}.node.ack circle.outer{stroke:#20c8ad;fill:#124c4b}.node.ack circle.inner{fill:#20c8ad}.node .timer-track{fill:none;stroke:#1a2638;stroke-width:5}.node .timer{fill:none;stroke:#a78bfa;stroke-width:5;stroke-linecap:round}.node .timer.low{stroke:#ff6b81}.node text{font-weight:800;text-anchor:middle;fill:#0c1624}.edge{stroke:#2a3c56;stroke-width:2}.packet{fill:#ad90ff;filter:drop-shadow(0 0 6px #a78bfa)}.packet.ack{fill:#2de2c4;filter:drop-shadow(0 0 6px #20c8ad)}.client rect{fill:#1b2a3f;stroke:#7547d5;stroke-width:2}.client text{fill:#eef2ff;text-anchor:middle;font-weight:800}.chip{font:800 11px Inter,sans-serif;text-anchor:middle}.log{fill:#1b2a3f;stroke:#41516a;stroke-width:1.5}.log.on{fill:#124c4b;stroke:#20c8ad}.meta{display:flex;gap:20px;flex-wrap:wrap;margin-top:20px;color:#bdc9da;font-size:13px;font-weight:750}.meta strong{color:#22d3b6}button{border:1px solid #41516a;background:#1a293e;color:#eef2ff;border-radius:10px;padding:11px 15px;cursor:pointer;font-weight:700}button:hover{background:#2b3b55}button.primary{background:#7547d5;border-color:#7547d5}button.primary:hover{background:#8d60ee}button:disabled{opacity:.35;cursor:default}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:22px}.progress{height:7px;background:#29364b;border-radius:8px;overflow:hidden;margin-top:20px}.progress div{height:100%;background:#a78bfa;transition:width .3s}.stepl{list-style:none;margin:0;padding:0}.stepl li{display:flex;gap:11px;padding:10px 11px;border-radius:11px;cursor:pointer;color:#9bacc5;font-size:13px;line-height:1.45;border:1px solid transparent}.stepl li b{display:block;color:#dbe5f6;font-size:14px}.stepl li i{flex:none;width:24px;height:24px;border-radius:50%;background:#22324b;color:#cbb2ff;font:800 12px Inter,sans-serif;display:grid;place-items:center;font-style:normal}.stepl li.cur{background:#2a2150;border-color:#7547d5}.stepl li.cur i{background:#7547d5;color:#fff}.stepl li.done i{background:#124c4b;color:#9cfff0}code{font:700 12.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:#9cfff0}table{width:100%;border-collapse:collapse;font-size:14px}th{font-size:11px;letter-spacing:1.2px;color:#8fa1ba;text-align:left;padding:6px 8px;border-bottom:1px solid #2a3a52}td{padding:9px 8px;border-bottom:1px solid #223048;color:#bdc9da;vertical-align:top}td:first-child{color:#eef2ff;font-weight:750;white-space:nowrap}.tip{margin-top:12px;color:#8496af;font-size:12.5px;line-height:1.5}.cfg{display:grid;grid-template-columns:1fr 1fr;gap:18px}.codebox{background:#070b13;border:1px solid #2a3a52;border-radius:12px;padding:14px 0;font:13px/1.9 ui-monospace,SFMono-Regular,Menlo,monospace;color:#cfe3ff;overflow-x:auto}.codebox div{padding:0 16px;white-space:pre;border-left:3px solid transparent}.codebox div.hl{background:#2a2150;border-left-color:#a78bfa}.k{color:#c4a6ff}.s{color:#9cfff0}.cfgl{list-style:none;margin:0;padding:0}.cfgl li{padding:10px 12px;border-radius:10px;color:#bdc9da;font-size:13.5px;line-height:1.5;cursor:default;border:1px solid transparent}.cfgl li.hl,.cfgl li:hover{background:#2a2150;border-color:#7547d5}.quote{margin-top:18px;text-align:center;font-size:clamp(17px,2.4vw,22px);font-weight:750;color:#eef2ff;padding:22px 16px;border-radius:16px;background:linear-gradient(135deg,#2a2150,#123a3b);border:1px solid #41516a}.quote span{color:#9cfff0}.notes{margin-top:18px;background:#141f30;border:1px solid #2a3a52;border-radius:14px;padding:14px 17px;color:#bdc9da;font-size:13px;line-height:1.65}.notes strong{color:#c4a6ff}.notes p{margin:8px 0 0}.note{color:#8496af;font-size:12px;margin-top:15px;line-height:1.5}@media(max-width:820px){body{padding:10px}.shell{padding:16px}.layout,.cfg{grid-template-columns:1fr}}
-.cmd{background:#2a2150;border-radius:4px;padding:1px 6px;color:#cbb2ff}</style><script src="nav.js"></script></head><body><main class="shell"><span class="pill">RAFT INTEGRATED STORAGE</span><h1>How HashiCorp Vault Uses Raft</h1><p class="sub"><strong>Vault uses Raft to keep encrypted data consistent across multiple servers.</strong> Integrated Storage lets Vault servers store and replicate encrypted data without a separate database or Consul cluster. <strong>Our cluster: 5 nodes — 1 active leader, 4 standby followers, quorum of 3.</strong></p><div id="title"></div><p id="desc"></p>
-<div class="layout"><section class="panel"><h2>WRITING A SECRET, STEP BY STEP</h2><svg viewBox="0 0 500 400" aria-label="Client writing to a five-node Vault cluster"><g id="edges"></g><g id="packets"></g><g id="nodes"></g><g id="client"></g></svg></section>
-<section class="panel"><h2>HOW DOES IT WORK?</h2><ul class="stepl" id="stepl"></ul></section></div>
-<div class="meta"><span id="acks"></span><span>QUORUM <strong>3 / 5</strong></span><span>RING = ELECTION TIMEOUT LEFT</span><span id="state"></span></div>
-<div class="controls"><button id="prev">← Previous</button><button id="next" class="primary">Next →</button><button id="play">▶ Play</button><button id="reset">↺ Reset</button></div><div class="progress"><div id="bar"></div></div>
-<section class="panel full"><h2>WHAT EACH VAULT NODE DOES</h2><table><thead><tr><th>Component</th><th>Responsibility</th></tr></thead><tbody><tr><td>Active Vault node</td><td>Handles client requests and processes secrets</td></tr><tr><td>Standby Vault nodes</td><td>Maintain replicated storage and can take over</td></tr><tr><td>Raft leader</td><td>Replicates log entries and coordinates commits</td></tr><tr><td>Raft followers</td><td>Receive and acknowledge replicated entries</td></tr><tr><td>Quorum</td><td>The majority required for Raft to make progress</td></tr></tbody></table><div class="tip"><strong>Important:</strong> the active Vault node and Raft leader are usually the same server in an Integrated Storage cluster, but they represent different responsibilities.</div></section>
-<section class="panel full"><h2>EXAMPLE VAULT CONFIGURATION</h2><div class="cfg"><div class="codebox" id="code"><div data-k="0"><span class="k">storage</span> <span class="s">"raft"</span> {</div><div data-k="1">  path    = <span class="s">"/opt/vault/data"</span></div><div data-k="2">  node_id = <span class="s">"vault-node-1"</span></div><div>}</div><div> </div><div data-k="3"><span class="k">cluster_addr</span> = <span class="s">"https://vault-node-1:8201"</span></div></div><ul class="cfgl" id="cfgl"><li data-k="0"><code>storage "raft"</code> tells Vault to use Raft Integrated Storage.</li><li data-k="1"><code>path</code> tells Vault where to save its persistent storage files.</li><li data-k="2"><code>node_id</code> uniquely identifies this server.</li><li data-k="3"><code>cluster_addr</code> tells other Vault servers how to communicate with this node.</li></ul></div><div class="tip">This is only a configuration excerpt, not a complete runnable configuration. Hover a line or an explanation to link them.</div></section>
-<div class="quote">Vault <span>secures the secrets.</span> Raft keeps their persistent storage <span>consistent and available</span> across the cluster.</div>
-<div class="notes"><strong>Speaker notes:</strong><p>"Now that we understand how Raft elects a leader, let's look at how HashiCorp Vault actually uses Raft. Vault has a feature called Integrated Storage, which uses Raft to store and replicate encrypted data across multiple servers.</p><p>Say we have five Vault servers, and S4 has been elected leader. If I write a secret to Vault, S4 processes the request and Vault encrypts the data before it reaches persistent storage. S4 then sends AppendEntries RPCs to the other four servers, and each follower that receives the entry sends an acknowledgment back.</p><p>Once three of our five voting nodes have the entry, including S4, the leader can commit it, assuming Raft's commit rules are satisfied. We don't need all five servers to acknowledge the write. We only need a majority. That lets Vault keep its storage consistent and keep operating even if some servers become unavailable. And if S4 fails, the remaining nodes can elect a new leader, provided they still have a quorum."</p></div>
-<div class="note">Educational visualization: simplified. Real Raft also checks log freshness and term-specific commit rules.</div></main><script>
-const hlCmd=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/vault kv put \S+ \w+="[^"]*"/g,m=>`<code class="cmd">${m}</code>`);
-// step: [title, description, packets [from,to,ack?], acked follower ids, leaderHasEntry, committed, chip text for leader, state label]
-// ids: 0..3 = S1,S2,S3,S5 followers; 4 = S4 leader; 5 = client
-const steps=[
-['Client writes a secret','A user stores a secret in Vault: vault kv put secret/myapp password="12345". Followers\' election timers keep being reset by the leader.',[[5,4]],[],false,false,'REQUEST RECEIVED','● WRITE REQUEST'],
-['Vault processes the secret','The active server authenticates the request, checks permissions, and encrypts the data before storing it.',[],[],false,false,'AUTH → POLICY → ENCRYPT','● PROCESSING'],
-['Raft replicates the data','The Raft leader sends AppendEntries RPCs to the other Vault nodes so they can store the encrypted data. Each RPC also resets the follower\'s election timeout.',[[4,0],[4,1],[4,2],[4,3]],[],true,false,'ENTRY APPENDED','● REPLICATING'],
-['A majority acknowledges the write','S1 and S2 acknowledge. With S4 that makes 3 of 5 voting nodes, a quorum. S3 and S5 are still catching up.',[[0,4,1],[1,4,1]],[0,1],true,false,'3 / 5 HAVE ENTRY','● QUORUM REACHED'],
-['Vault confirms the write','Once the storage operation is committed and processed successfully, Vault acknowledges the request. The remaining nodes catch up afterward.',[[4,5,1]],[0,1,2,3],true,true,'ENTRY COMMITTED','● COMMITTED']];
-const timeouts=[270,210,240,290],left=[[200,150,180,240],[170,120,150,210],[270,210,240,290],[255,195,225,275],[260,200,230,280]];
-const pos=[[70,300],[190,300],[310,300],[430,300],[250,170],[250,48]],names=['S1','S2','S3','S5','S4'];let index=0,timer=null,phase=0;const $=id=>document.getElementById(id);
-$('stepl').innerHTML=steps.map((s,i)=>`<li data-i="${i}"><i>${i+1}</i><span><b>${s[0]}</b>${s[1].split(':')[0]}</span></li>`).join('');
-function draw(){let s=steps[index],acked=s[3],count=(s[4]?1:0)+acked.length;
-$('title').textContent=(index+1)+' / '+steps.length+' — '+s[0];$('desc').innerHTML=hlCmd(s[1]);$('bar').style.width=((index+1)/steps.length*100)+'%';$('prev').disabled=index===0;$('next').disabled=index===steps.length-1;$('acks').innerHTML='NODES WITH ENTRY <strong>'+count+'/5</strong>';$('state').textContent=s[7];
-document.querySelectorAll('#stepl li').forEach((li,i)=>{li.classList.toggle('cur',i===index);li.classList.toggle('done',i<index)});
-$('edges').innerHTML=[0,1,2,3].map(i=>`<line class="edge" x1="${pos[4][0]}" y1="${pos[4][1]}" x2="${pos[i][0]}" y2="${pos[i][1]}"/>`).join('')+`<line class="edge" x1="${pos[5][0]}" y1="${pos[5][1]+22}" x2="${pos[4][0]}" y2="${pos[4][1]}"/>`;
-$('client').innerHTML=`<g class="client"><rect x="190" y="26" width="120" height="44" rx="10"/><text x="250" y="53" font-size="15">CLIENT</text></g>`;
-$('nodes').innerHTML=[0,1,2,3,4].map(i=>{let[x,y]=pos[i],lead=i===4,has=lead?s[4]:acked.includes(i),role=lead?'leader':has?'ack':'follower',r=lead?44:38,chip,col;
-if(lead){chip=s[6];col='#20c8ad'}else if(has){chip='✓ HAS ENTRY';col='#20c8ad'}else if(s[4]){chip='… PENDING';col='#f0aa56'}else{chip='';col=''}
-let logx=x-24,log=!lead||true?`<rect class="log ${has?'on':''}" x="${logx}" y="${y+r+30}" width="48" height="22" rx="5"/>${has?`<text x="${x}" y="${y+r+46}" text-anchor="middle" font-size="13" font-weight="800" fill="#9cfff0">${s[5]&&(lead||acked.includes(i))?'✓':'1'}</text>`:''}`:'';
-let L=lead?null:left[index][i],f=lead?0:L/timeouts[i],ring=lead?'':`<circle class="timer-track" r="${r-4.5}"/><circle class="timer${f<.25?' low':''}" r="${r-4.5}" transform="rotate(-90)" stroke-dasharray="${2*Math.PI*(r-4.5)*f} ${2*Math.PI*(r-4.5)}"/>`;
-return `<g class="node ${role}" transform="translate(${x},${y})"><circle class="outer" r="${r}"/>${ring}<circle class="inner" r="${r-9}"/><text y="-8" font-size="${lead?21:17}">${names[i]}</text><text y="5" font-size="7">${lead?'ACTIVE / LEADER':'STANDBY'}</text><text y="${lead?17:15}" font-size="7">${lead?'NO TIMEOUT':L+'/'+timeouts[i]+'ms'}</text></g>${chip?`<text class="chip" x="${x}" y="${y+r+18}" fill="${col}">${chip}</text>`:''}${log}`}).join('');drawPackets()}
-function drawPackets(){let a=steps[index][2];$('packets').innerHTML=a.map(([f,t,ack])=>{let p=pos[f],q=pos[t],u=.12+.76*phase;let y0=f===5?p[1]+22:p[1],y1=t===5?q[1]+22:q[1];return `<circle class="packet ${ack?'ack':''}" cx="${p[0]+(q[0]-p[0])*u}" cy="${y0+(y1-y0)*u}" r="8"/>`}).join('')}
-function animate(t){phase=(t%1200)/1200;drawPackets();requestAnimationFrame(animate)}function stop(){clearInterval(timer);timer=null;$('play').textContent='▶ Play'}function step(n){index=Math.max(0,Math.min(steps.length-1,n));draw()}
-$('prev').onclick=()=>{stop();step(index-1)};$('next').onclick=()=>{stop();step(index+1)};$('reset').onclick=()=>{stop();step(0)};$('stepl').onclick=e=>{let li=e.target.closest('li');if(li){stop();step(+li.dataset.i)}};
-$('play').onclick=()=>{if(timer){stop();return}if(index===steps.length-1)step(0);$('play').textContent='Ⅱ Pause';timer=setInterval(()=>{if(index===steps.length-1){stop();return}step(index+1)},2400)};
-const hl=k=>document.querySelectorAll('[data-k]').forEach(e=>e.classList.toggle('hl',e.dataset.k===k));document.querySelectorAll('#code [data-k],#cfgl [data-k]').forEach(e=>{e.onmouseenter=()=>hl(e.dataset.k);e.onmouseleave=()=>hl(null)});
-draw();requestAnimationFrame(animate);
-</script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>How Vault Uses Raft</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(ellipse at 25% 0%, #211a3c 0%, #090d18 50%);
+        color: #eef2ff;
+        min-height: 100vh;
+        padding: 28px;
+      }
+      .shell {
+        max-width: 1200px;
+        margin: auto;
+        background: #101827;
+        border: 1px solid #29354b;
+        border-radius: 24px;
+        padding: 28px;
+        box-shadow: 0 25px 70px #0006;
+      }
+      .pill {
+        display: inline-block;
+        background: #352350;
+        color: #cbb2ff;
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 1px;
+      }
+      h1 {
+        font-size: clamp(26px, 4vw, 40px);
+        margin: 16px 0 6px;
+        letter-spacing: -1px;
+      }
+      .sub {
+        color: #9bacc5;
+        margin: 0 0 18px;
+        line-height: 1.5;
+      }
+      .sub strong {
+        color: #eef2ff;
+      }
+      #title {
+        font-size: 20px;
+        color: #c4a6ff;
+        font-weight: 750;
+        margin: 10px 0 5px;
+      }
+      #desc {
+        color: #9bacc5;
+        margin: 0 0 22px;
+        min-height: 25px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr;
+        gap: 18px;
+      }
+      .panel {
+        background: #141f30;
+        border: 1px solid #2a3a52;
+        border-radius: 18px;
+        padding: 17px;
+        min-width: 0;
+      }
+      .panel + .panel {
+        margin: 0;
+      }
+      .panel h2 {
+        font-size: 12px;
+        letter-spacing: 1.6px;
+        color: #8fa1ba;
+        margin: 0 0 10px;
+      }
+      .full {
+        margin-top: 18px;
+      }
+      svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .node circle.outer {
+        fill: #22324b;
+        stroke: #7187b0;
+        stroke-width: 3;
+        transition:
+          fill 0.35s,
+          stroke 0.35s;
+      }
+      .node circle.inner {
+        fill: #7187b0;
+      }
+      .node.leader circle.outer {
+        stroke: #20c8ad;
+      }
+      .node.leader circle.inner {
+        fill: #20c8ad;
+      }
+      .node.ack circle.outer {
+        stroke: #20c8ad;
+        fill: #124c4b;
+      }
+      .node.ack circle.inner {
+        fill: #20c8ad;
+      }
+      .node .timer-track {
+        fill: none;
+        stroke: #1a2638;
+        stroke-width: 5;
+      }
+      .node .timer {
+        fill: none;
+        stroke: #a78bfa;
+        stroke-width: 5;
+        stroke-linecap: round;
+      }
+      .node .timer.low {
+        stroke: #ff6b81;
+      }
+      .node text {
+        font-weight: 800;
+        text-anchor: middle;
+        fill: #0c1624;
+      }
+      .edge {
+        stroke: #2a3c56;
+        stroke-width: 2;
+      }
+      .packet {
+        fill: #ad90ff;
+        filter: drop-shadow(0 0 6px #a78bfa);
+      }
+      .packet.ack {
+        fill: #2de2c4;
+        filter: drop-shadow(0 0 6px #20c8ad);
+      }
+      .client rect {
+        fill: #1b2a3f;
+        stroke: #7547d5;
+        stroke-width: 2;
+      }
+      .client text {
+        fill: #eef2ff;
+        text-anchor: middle;
+        font-weight: 800;
+      }
+      .chip {
+        font:
+          800 11px Inter,
+          sans-serif;
+        text-anchor: middle;
+      }
+      .log {
+        fill: #1b2a3f;
+        stroke: #41516a;
+        stroke-width: 1.5;
+      }
+      .log.on {
+        fill: #124c4b;
+        stroke: #20c8ad;
+      }
+      .meta {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+        color: #bdc9da;
+        font-size: 13px;
+        font-weight: 750;
+      }
+      .meta strong {
+        color: #22d3b6;
+      }
+      button {
+        border: 1px solid #41516a;
+        background: #1a293e;
+        color: #eef2ff;
+        border-radius: 10px;
+        padding: 11px 15px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      button:hover {
+        background: #2b3b55;
+      }
+      button.primary {
+        background: #7547d5;
+        border-color: #7547d5;
+      }
+      button.primary:hover {
+        background: #8d60ee;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 22px;
+      }
+      .progress {
+        height: 7px;
+        background: #29364b;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 20px;
+      }
+      .progress div {
+        height: 100%;
+        background: #a78bfa;
+        transition: width 0.3s;
+      }
+      .stepl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .stepl li {
+        display: flex;
+        gap: 11px;
+        padding: 10px 11px;
+        border-radius: 11px;
+        cursor: pointer;
+        color: #9bacc5;
+        font-size: 13px;
+        line-height: 1.45;
+        border: 1px solid transparent;
+      }
+      .stepl li b {
+        display: block;
+        color: #dbe5f6;
+        font-size: 14px;
+      }
+      .stepl li i {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #22324b;
+        color: #cbb2ff;
+        font:
+          800 12px Inter,
+          sans-serif;
+        display: grid;
+        place-items: center;
+        font-style: normal;
+      }
+      .stepl li.cur {
+        background: #2a2150;
+        border-color: #7547d5;
+      }
+      .stepl li.cur i {
+        background: #7547d5;
+        color: #fff;
+      }
+      .stepl li.done i {
+        background: #124c4b;
+        color: #9cfff0;
+      }
+      code {
+        font:
+          700 12.5px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        color: #9cfff0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        font-size: 11px;
+        letter-spacing: 1.2px;
+        color: #8fa1ba;
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid #2a3a52;
+      }
+      td {
+        padding: 9px 8px;
+        border-bottom: 1px solid #223048;
+        color: #bdc9da;
+        vertical-align: top;
+      }
+      td:first-child {
+        color: #eef2ff;
+        font-weight: 750;
+        white-space: nowrap;
+      }
+      .tip {
+        margin-top: 12px;
+        color: #8496af;
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .cfg {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .codebox {
+        background: #070b13;
+        border: 1px solid #2a3a52;
+        border-radius: 12px;
+        padding: 14px 0;
+        font:
+          13px/1.9 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        color: #cfe3ff;
+        overflow-x: auto;
+      }
+      .codebox div {
+        padding: 0 16px;
+        white-space: pre;
+        border-left: 3px solid transparent;
+      }
+      .codebox div.hl {
+        background: #2a2150;
+        border-left-color: #a78bfa;
+      }
+      .k {
+        color: #c4a6ff;
+      }
+      .s {
+        color: #9cfff0;
+      }
+      .cfgl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .cfgl li {
+        padding: 10px 12px;
+        border-radius: 10px;
+        color: #bdc9da;
+        font-size: 13.5px;
+        line-height: 1.5;
+        cursor: default;
+        border: 1px solid transparent;
+      }
+      .cfgl li.hl,
+      .cfgl li:hover {
+        background: #2a2150;
+        border-color: #7547d5;
+      }
+      .quote {
+        margin-top: 18px;
+        text-align: center;
+        font-size: clamp(17px, 2.4vw, 22px);
+        font-weight: 750;
+        color: #eef2ff;
+        padding: 22px 16px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #2a2150, #123a3b);
+        border: 1px solid #41516a;
+      }
+      .quote span {
+        color: #9cfff0;
+      }
+      .notes {
+        margin-top: 18px;
+        background: #141f30;
+        border: 1px solid #2a3a52;
+        border-radius: 14px;
+        padding: 14px 17px;
+        color: #bdc9da;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      .notes strong {
+        color: #c4a6ff;
+      }
+      .notes p {
+        margin: 8px 0 0;
+      }
+      .note {
+        color: #8496af;
+        font-size: 12px;
+        margin-top: 15px;
+        line-height: 1.5;
+      }
+      @media (max-width: 820px) {
+        body {
+          padding: 10px;
+        }
+        .shell {
+          padding: 16px;
+        }
+        .layout,
+        .cfg {
+          grid-template-columns: 1fr;
+        }
+      }
+      .cmd {
+        background: #2a2150;
+        border-radius: 4px;
+        padding: 1px 6px;
+        color: #cbb2ff;
+      }
+    .gloss{position:relative;background:#2a2150;color:#cbb2ff;border-bottom:1.5px dotted #cbb2ff;border-radius:4px 4px 0 0;padding:0 4px;cursor:help;outline:none}.gloss::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 12px);transform:translate(-50%,6px);width:min(320px,80vw);background:#101827;border:1px solid #7547d5;border-radius:12px;padding:11px 13px;color:#dbe5f6;font-size:13px;font-weight:500;line-height:1.5;text-align:left;white-space:normal;box-shadow:0 14px 40px #000a;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:50}.gloss::before{content:"";position:absolute;left:50%;bottom:calc(100% + 6px);width:10px;height:10px;background:#101827;border-right:1px solid #7547d5;border-bottom:1px solid #7547d5;transform:translateX(-50%) rotate(45deg);opacity:0;transition:opacity .18s;z-index:51;pointer-events:none}.gloss:hover::after,.gloss:focus-visible::after{opacity:1;transform:translate(-50%,0)}.gloss:hover::before,.gloss:focus-visible::before{opacity:1}
+</style>
+    <script src="nav.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <span class="pill">RAFT INTEGRATED STORAGE</span>
+      <h1>How HashiCorp Vault Uses Raft</h1>
+      <p class="sub">
+        <strong
+          >Vault uses Raft to keep encrypted data consistent across multiple
+          servers.</strong
+        >
+        Integrated Storage lets Vault servers store and replicate encrypted data
+        without a separate database or Consul cluster.
+        <strong
+          >The cluster below: 5 nodes - 1 active leader, 4 standby followers,
+          quorum of 3.</strong
+        >
+      </p>
+      <div id="title"></div>
+      <p id="desc"></p>
+      <div class="layout">
+        <section class="panel">
+          <h2>WRITING A SECRET, STEP BY STEP</h2>
+          <svg
+            viewBox="0 0 500 400"
+            aria-label="Client writing to a five-node Vault cluster"
+          >
+            <g id="edges"></g>
+            <g id="packets"></g>
+            <g id="nodes"></g>
+            <g id="client"></g>
+          </svg>
+        </section>
+        <section class="panel">
+          <h2>HOW DOES IT WORK?</h2>
+          <ul class="stepl" id="stepl"></ul>
+        </section>
+      </div>
+      <div class="meta">
+        <span id="acks"></span><span>QUORUM <strong>3 / 5</strong></span
+        ><span>RING = ELECTION TIMEOUT LEFT</span><span id="state"></span>
+      </div>
+      <div class="controls">
+        <button id="prev">← Previous</button
+        ><button id="next" class="primary">Next →</button
+        ><button id="play">▶ Play</button><button id="reset">↺ Reset</button>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+      <section class="panel full">
+        <h2>WHAT EACH VAULT NODE DOES</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Responsibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Active Vault node</td>
+              <td>Handles client requests and processes secrets</td>
+            </tr>
+            <tr>
+              <td>Standby Vault nodes</td>
+              <td>Maintain replicated storage and can take over</td>
+            </tr>
+            <tr>
+              <td>Raft leader</td>
+              <td>Replicates log entries and coordinates commits</td>
+            </tr>
+            <tr>
+              <td>Raft followers</td>
+              <td>Receive and acknowledge replicated entries</td>
+            </tr>
+            <tr>
+              <td>Quorum</td>
+              <td>The majority required for Raft to make progress</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="tip">
+          <strong>Important:</strong> the active Vault node and Raft leader are
+          usually the same server in an Integrated Storage cluster, but they
+          represent different responsibilities.
+        </div>
+      </section>
+      <section class="panel full">
+        <h2>EXAMPLE VAULT CONFIGURATION</h2>
+        <div class="cfg">
+          <div class="codebox" id="code">
+            <div data-k="0">
+              <span class="k">storage</span> <span class="s">"raft"</span> {
+            </div>
+            <div data-k="1">
+              path = <span class="s">"/opt/vault/data"</span>
+            </div>
+            <div data-k="2">
+              node_id = <span class="s">"vault-node-1"</span>
+            </div>
+            <div>}</div>
+            <div></div>
+            <div data-k="3">
+              <span class="k">cluster_addr</span> =
+              <span class="s">"https://vault-node-1:8201"</span>
+            </div>
+          </div>
+          <ul class="cfgl" id="cfgl">
+            <li data-k="0">
+              <code>storage "raft"</code> tells Vault to use Raft Integrated
+              Storage.
+            </li>
+            <li data-k="1">
+              <code>path</code> tells Vault where to save its persistent storage
+              files.
+            </li>
+            <li data-k="2">
+              <code>node_id</code> uniquely identifies this server.
+            </li>
+            <li data-k="3">
+              <code>cluster_addr</code> tells other Vault servers how to
+              communicate with this node.
+            </li>
+          </ul>
+        </div>
+        <div class="tip">
+          This is only a configuration excerpt, not a complete runnable
+          configuration. Hover a line or an explanation to link them.
+        </div>
+      </section>
+      <div class="quote">
+        Vault <span>secures the secrets.</span> Raft keeps their persistent
+        storage <span>consistent and available</span> across the cluster.
+      </div>
+      <div class="notes">
+        <strong>Speaker notes:</strong>
+        <p>
+          "Now that we understand how Raft elects a leader, let's look at how
+          HashiCorp Vault actually uses Raft. Vault has a feature called
+          Integrated Storage, which uses Raft to store and replicate encrypted
+          data across multiple servers.
+        </p>
+        <p>
+          Say we have five Vault servers, and S4 has been elected leader. If I
+          write a secret to Vault, S4 processes the request and Vault encrypts
+          the data before it reaches persistent storage. S4 then sends
+          AppendEntries RPCs to the other four servers, and each follower that
+          receives the entry sends an acknowledgment back.
+        </p>
+        <p>
+          Once three of our five voting nodes have the entry, including S4, the
+          leader can commit it, assuming Raft's commit rules are satisfied. We
+          don't need all five servers to acknowledge the write. We only need a
+          majority. That lets Vault keep its storage consistent and keep
+          operating even if some servers become unavailable. And if S4 fails,
+          the remaining nodes can elect a new leader, provided they still have a
+          quorum."
+        </p>
+      </div>
+      <div class="note">
+        Educational visualization: simplified. Real Raft also checks log
+        freshness and term-specific commit rules.
+      </div>
+    </main>
+    <script>
+      // Highlight "quorum" with a short definition bubble (hover or keyboard focus).
+      const QUORUM_TIP =
+        "The minimum majority of voting nodes that must agree before Raft can commit a write or elect a leader. With 5 nodes, that is 3.";
+      const glossary = (t) =>
+        t.replace(
+          /\bquorum\b/gi,
+          (m) => `<span class="gloss" tabindex="0" data-tip="${QUORUM_TIP}">${m}</span>`,
+        );
+      // "Remote Procedure Calls (RPC)": highlighted in the step text, same definition as on the log-consistency page.
+      const RPC_TIP =
+        "A remote procedure call (RPC) is a message one server sends to another that asks it to run an action and send back a reply. In Raft, the leader uses RPCs to tell followers to add a log entry (AppendEntries) or to ask for votes (RequestVote).";
+      const rpcGlossary = (t) =>
+        t.replace(
+          /Remote Procedure Calls \(RPC\)/g,
+          (m) => `<span class="gloss" tabindex="0" data-tip="${RPC_TIP}">${m}</span>`,
+        );
+      const hlCmd = (t) =>
+        t
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(
+            /vault kv put \S+ \w+="[^"]*"/g,
+            (m) => `<code class="cmd">${m}</code>`,
+          );
+      // step: [title, description, packets [from,to,ack?], acked follower ids, leaderHasEntry, committed, chip text for leader, state label]
+      // ids: 0..3 = S1,S2,S3,S5 followers; 4 = S4 leader; 5 = client
+      const steps = [
+        [
+          "Client writes a secret",
+          'A user stores a secret in Vault: vault kv put secret/myapp password="12345". Followers\' election timers keep being reset by the leader.',
+          [[5, 4]],
+          [],
+          false,
+          false,
+          "REQUEST RECEIVED",
+          "● WRITE REQUEST",
+        ],
+        [
+          "Vault processes the secret",
+          "The active server authenticates the request, checks permissions, and encrypts the data before storing it.",
+          [],
+          [],
+          false,
+          false,
+          "AUTH → POLICY → ENCRYPT",
+          "● PROCESSING",
+        ],
+        [
+          "Raft replicates the data",
+          "The Raft leader sends AppendEntries Remote Procedure Calls (RPC) to the other Vault nodes so they can store the encrypted data. Each RPC also resets the follower's election timeout.",
+          [
+            [4, 0],
+            [4, 1],
+            [4, 2],
+            [4, 3],
+          ],
+          [],
+          true,
+          false,
+          "ENTRY APPENDED",
+          "● REPLICATING",
+        ],
+        [
+          "A majority acknowledges the write",
+          "S1 and S2 acknowledge. With S4 that makes 3 of 5 voting nodes, a quorum. S3 and S5 are still catching up.",
+          [
+            [0, 4, 1],
+            [1, 4, 1],
+          ],
+          [0, 1],
+          true,
+          false,
+          "3 / 5 HAVE ENTRY",
+          "● QUORUM REACHED",
+        ],
+        [
+          "Vault confirms the write",
+          "Once the storage operation is committed and processed successfully, Vault acknowledges the request. The remaining nodes catch up afterward.",
+          [[4, 5, 1]],
+          [0, 1, 2, 3],
+          true,
+          true,
+          "ENTRY COMMITTED",
+          "● COMMITTED",
+        ],
+      ];
+      const timeouts = [270, 210, 240, 290],
+        left = [
+          [200, 150, 180, 240],
+          [170, 120, 150, 210],
+          [270, 210, 240, 290],
+          [255, 195, 225, 275],
+          [260, 200, 230, 280],
+        ];
+      const pos = [
+          [70, 300],
+          [190, 300],
+          [310, 300],
+          [430, 300],
+          [250, 170],
+          [250, 48],
+        ],
+        names = ["S1", "S2", "S3", "S5", "S4"];
+      let index = 0,
+        timer = null,
+        phase = 0;
+      const $ = (id) => document.getElementById(id);
+      $("stepl").innerHTML = steps
+        .map(
+          (s, i) =>
+            `<li data-i="${i}"><i>${i + 1}</i><span><b>${s[0]}</b>${s[1].split(":")[0]}</span></li>`,
+        )
+        .join("");
+      function draw() {
+        let s = steps[index],
+          acked = s[3],
+          count = (s[4] ? 1 : 0) + acked.length;
+        $("title").textContent =
+          index + 1 + " / " + steps.length + " — " + s[0];
+        $("desc").innerHTML = rpcGlossary(hlCmd(s[1]));
+        $("bar").style.width = ((index + 1) / steps.length) * 100 + "%";
+        $("prev").disabled = index === 0;
+        $("next").disabled = index === steps.length - 1;
+        $("acks").innerHTML =
+          "NODES WITH ENTRY <strong>" + count + "/5</strong>";
+        $("state").textContent = s[7];
+        document.querySelectorAll("#stepl li").forEach((li, i) => {
+          li.classList.toggle("cur", i === index);
+          li.classList.toggle("done", i < index);
+        });
+        $("edges").innerHTML =
+          [0, 1, 2, 3]
+            .map(
+              (i) =>
+                `<line class="edge" x1="${pos[4][0]}" y1="${pos[4][1]}" x2="${pos[i][0]}" y2="${pos[i][1]}"/>`,
+            )
+            .join("") +
+          `<line class="edge" x1="${pos[5][0]}" y1="${pos[5][1] + 22}" x2="${pos[4][0]}" y2="${pos[4][1]}"/>`;
+        $("client").innerHTML =
+          `<g class="client"><rect x="190" y="26" width="120" height="44" rx="10"/><text x="250" y="53" font-size="15">CLIENT</text></g>`;
+        $("nodes").innerHTML = [0, 1, 2, 3, 4]
+          .map((i) => {
+            let [x, y] = pos[i],
+              lead = i === 4,
+              has = lead ? s[4] : acked.includes(i),
+              role = lead ? "leader" : has ? "ack" : "follower",
+              r = lead ? 44 : 38,
+              chip,
+              col;
+            if (lead) {
+              chip = s[6];
+              col = "#20c8ad";
+            } else if (has) {
+              chip = "✓ HAS ENTRY";
+              col = "#20c8ad";
+            } else if (s[4]) {
+              chip = "… PENDING";
+              col = "#f0aa56";
+            } else {
+              chip = "";
+              col = "";
+            }
+            let logx = x - 24,
+              log =
+                !lead || true
+                  ? `<rect class="log ${has ? "on" : ""}" x="${logx}" y="${y + r + 30}" width="48" height="22" rx="5"/>${has ? `<text x="${x}" y="${y + r + 46}" text-anchor="middle" font-size="13" font-weight="800" fill="#9cfff0">${s[5] && (lead || acked.includes(i)) ? "✓" : "1"}</text>` : ""}`
+                  : "";
+            let L = lead ? null : left[index][i],
+              f = lead ? 0 : L / timeouts[i],
+              ring = lead
+                ? ""
+                : `<circle class="timer-track" r="${r - 4.5}"/><circle class="timer${f < 0.25 ? " low" : ""}" r="${r - 4.5}" transform="rotate(-90)" stroke-dasharray="${2 * Math.PI * (r - 4.5) * f} ${2 * Math.PI * (r - 4.5)}"/>`;
+            return `<g class="node ${role}" transform="translate(${x},${y})"><circle class="outer" r="${r}"/>${ring}<circle class="inner" r="${r - 9}"/><text y="-8" font-size="${lead ? 21 : 17}">${names[i]}</text><text y="5" font-size="7">${lead ? "ACTIVE / LEADER" : "STANDBY"}</text><text y="${lead ? 17 : 15}" font-size="7">${lead ? "NO TIMEOUT" : L + "/" + timeouts[i] + "ms"}</text></g>${chip ? `<text class="chip" x="${x}" y="${y + r + 18}" fill="${col}">${chip}</text>` : ""}${log}`;
+          })
+          .join("");
+        drawPackets();
+      }
+      function drawPackets() {
+        let a = steps[index][2];
+        $("packets").innerHTML = a
+          .map(([f, t, ack]) => {
+            let p = pos[f],
+              q = pos[t],
+              u = 0.12 + 0.76 * phase;
+            let y0 = f === 5 ? p[1] + 22 : p[1],
+              y1 = t === 5 ? q[1] + 22 : q[1];
+            return `<circle class="packet ${ack ? "ack" : ""}" cx="${p[0] + (q[0] - p[0]) * u}" cy="${y0 + (y1 - y0) * u}" r="8"/>`;
+          })
+          .join("");
+      }
+      function animate(t) {
+        phase = (t % 1200) / 1200;
+        drawPackets();
+        requestAnimationFrame(animate);
+      }
+      function stop() {
+        clearInterval(timer);
+        timer = null;
+        $("play").textContent = "▶ Play";
+      }
+      function step(n) {
+        index = Math.max(0, Math.min(steps.length - 1, n));
+        draw();
+      }
+      $("prev").onclick = () => {
+        stop();
+        step(index - 1);
+      };
+      $("next").onclick = () => {
+        stop();
+        step(index + 1);
+      };
+      $("reset").onclick = () => {
+        stop();
+        step(0);
+      };
+      $("stepl").onclick = (e) => {
+        let li = e.target.closest("li");
+        if (li) {
+          stop();
+          step(+li.dataset.i);
+        }
+      };
+      $("play").onclick = () => {
+        if (timer) {
+          stop();
+          return;
+        }
+        if (index === steps.length - 1) step(0);
+        $("play").textContent = "Ⅱ Pause";
+        timer = setInterval(() => {
+          if (index === steps.length - 1) {
+            stop();
+            return;
+          }
+          step(index + 1);
+        }, 2400);
+      };
+      const hl = (k) =>
+        document
+          .querySelectorAll("[data-k]")
+          .forEach((e) => e.classList.toggle("hl", e.dataset.k === k));
+      document
+        .querySelectorAll("#code [data-k],#cfgl [data-k]")
+        .forEach((e) => {
+          e.onmouseenter = () => hl(e.dataset.k);
+          e.onmouseleave = () => hl(null);
+        });
+      draw();
+      requestAnimationFrame(animate);
+      // "quorum" is highlighted once, in the header line.
+      document
+        .querySelectorAll(".sub strong")
+        .forEach((el) => (el.innerHTML = glossary(el.innerHTML)));
+    </script>
+  </body>
+</html>
