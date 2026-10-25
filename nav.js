@@ -1,7 +1,7 @@
 // Shared navigation: hamburger menu, slide counter, and ←/→ slide transitions.
 // Load from <head> (blocking) so the entrance overlay can cover the page before first paint.
 (function(){
-const pages=[['index.html','Raft & How Vault uses it','Title page'],['raft_dark_mode.html','Consensus in Motion','Leader election and log replication',['Introduction: What Is Raft?','Distributed Systems Basics']],['raft_log_consistency.html','How Raft Keeps Data Consistent','Log append, replicate, commit'],['raft_vault_storage.html','How Vault Uses Raft','Integrated Storage and quorum writes'],['raft_failover.html','Failure Recovery','High availability and quorum'],['raft_bank_example.html','A Bank\'s Vault Cluster','Real-world scenarios'],['raft_vault_cli.html','Vault CLI','Observing a real cluster']];
+const pages=[['index.html','Raft & How Vault uses it','Title page'],['raft_dark_mode.html','Consensus in Motion','Leader election and log replication',['Introduction: What Is Raft?','Distributed Systems Basics']],['raft_log_consistency.html','How Raft Keeps Data Consistent','Log append, replicate, commit'],['raft_vault_storage.html','How Vault Uses Raft','Integrated Storage and quorum writes'],['raft_failover.html','Failure Recovery','High availability and quorum'],['raft_bank_example.html','A Bank\'s Vault Cluster','Real-world scenarios'],['raft_key_takeaways.html','Key Takeaways','Raft consensus in Vault']];
 const file=decodeURIComponent(location.pathname.split('/').pop())||pages[0][0];
 const idx=Math.max(0,pages.findIndex(p=>p[0]===file));
 const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
